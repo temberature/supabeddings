@@ -9,6 +9,7 @@
 		"https-proxy-agent": "^7.0.2",
 		"jsdom": "^23.0.1",
 		"md5": "^2.3.0",
+		"node-cron": "^3.0.3",
 		"node-fetch": "^3.3.2",
 		"openai": "^4.24.1",
 		"tiktoken": "^1.0.11",

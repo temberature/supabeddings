@@ -9,6 +9,9 @@ import gpt3Encoder from 'gpt-3-encoder';
 import { fetchRaindropBookmarks } from './raindrop.mjs';
 import TurndownService from 'turndown';
 import { get_encoding, encoding_for_model } from "tiktoken";
+import cron from 'node-cron';
+
+
 
 const enc = get_encoding("cl100k_base");
 
@@ -40,7 +43,7 @@ async function fetchPageContent(url) {
 }
 
 
-async function getEmbeddings(content) {
+async function getEmbeddings(chunks) {
     const response = await fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
         headers: {
@@ -48,15 +51,16 @@ async function getEmbeddings(content) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            input: content,
+            input: chunks, // chunks 是一个文本数组
             model: "text-embedding-ada-002",
         }),
         agent: proxyAgent,
         signal: AbortSignal.timeout(10000),
     });
     const responseJson = await response.json();
-    return responseJson.data[0].embedding;
+    return responseJson.data.map(item => item.embedding); // 返回每个块的嵌入向量数组
 }
+
 
 function splitContentForEmbedding(content, minTokens = 20, maxTokens = 8191) {
     const paragraphs = content.split(/\n+/);
@@ -181,12 +185,13 @@ async function insertBookmarkIfNotExists(bookmark) {
 // ...之前的import语句和函数定义...
 
 async function processBookmark(bookmark) {
+    console.log(bookmark.link);
     // 检查该网址是否已经处理过
     const { data: existingData, error: selectError } = await supabase
         .from('documents')
         .select('url')
         .eq('url', bookmark.link);
-
+    
     if (selectError) {
         console.error('Error querying existing URL:', selectError);
         return;
@@ -197,6 +202,7 @@ async function processBookmark(bookmark) {
         console.log(`URL already processed: ${bookmark.link}`);
         return;
     }
+    // return;
 
     // 如果网址不存在，则插入新的书签并处理内容
     const inserted = await insertBookmarkIfNotExists(bookmark);
@@ -212,10 +218,38 @@ async function processBookmark(bookmark) {
 
     const markdownContent = turndownService.turndown(pageContent);
     const contentChunks = splitContentForEmbedding(markdownContent);
+    const chunksEmbeddings = await getEmbeddings(contentChunks);
 
+    if (chunksEmbeddings.length !== contentChunks.length) {
+        console.error('Mismatch in number of chunks and embeddings');
+        return;
+    }
+
+    // 准备要插入的数据数组
+    let chunksData = [];
     for (let i = 0; i < contentChunks.length; i++) {
-        const chunkEmbedding = await getEmbeddings(contentChunks[i]);
-        await saveChunkToSupabase(bookmark, contentChunks[i], i, chunkEmbedding);
+        const contentMd5 = md5(contentChunks[i]);
+        chunksData.push({
+            bookmark_id: bookmark.id,
+            title: bookmark.title,
+            url: bookmark.link,
+            excerpt: bookmark.excerpt ?? "",
+            chunk_index: i,
+            checksum: contentMd5,
+            content: contentChunks[i],
+            embedding: chunksEmbeddings[i],
+        });
+    }
+
+    // 一次性插入所有块数据
+    const { data, error } = await supabase
+        .from('document_chunks')
+        .insert(chunksData);
+
+    if (error) {
+        console.error('Error saving chunks:', error);
+    } else {
+        console.log('Saved chunks:', data.length);
     }
 }
 
@@ -248,5 +282,10 @@ async function main() {
     }
 }
 
-main();
+// main();
 
+// 每分钟执行任务
+cron.schedule('* * * * *', async () => {
+    console.log('Running task every minute');
+    await main();
+});
