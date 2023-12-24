@@ -38,6 +38,9 @@ dependencies:
   openai:
     specifier: ^4.24.1
     version: 4.24.1
+  tiktoken:
+    specifier: ^1.0.11
+    version: 1.0.11
   turndown:
     specifier: ^7.1.2
     version: 7.1.2
@@ -490,6 +493,10 @@ packages:
 
   /symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
+    dev: false
+
+  /tiktoken@1.0.11:
+    resolution: {integrity: sha512-aMJcn9NGmb6zDXkCweJLnACyIyjdiYIk1odAfnCUvin7O1QsV1rQP1hatGDMhQovxkeSJhFeU7QuGkbDHGciDQ==}
     dev: false
 
   /tough-cookie@4.1.3:

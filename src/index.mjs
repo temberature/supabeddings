@@ -8,6 +8,9 @@ import dotenv from 'dotenv';
 import gpt3Encoder from 'gpt-3-encoder';
 import { fetchRaindropBookmarks } from './raindrop.mjs';
 import TurndownService from 'turndown';
+import { get_encoding, encoding_for_model } from "tiktoken";
+
+const enc = get_encoding("cl100k_base");
 
 // 初始化Turndown服务
 const turndownService = new TurndownService();
@@ -55,34 +58,61 @@ async function getEmbeddings(content) {
     return responseJson.data[0].embedding;
 }
 
-function splitContentForEmbedding(content, maxTokens = 8191) {
+function splitContentForEmbedding(content, minTokens = 20, maxTokens = 8191) {
     const paragraphs = content.split(/\n+/);
     let chunks = [];
+    let tempChunk = '';
 
     paragraphs.forEach(paragraph => {
-        // 如果段落本身就超过了最大token数，则需要进一步分割
-        if (gpt3Encoder.encode(paragraph).length > maxTokens) {
-            let start = 0;
-            while (start < paragraph.length) {
-                let end = start;
-                while (end < paragraph.length && gpt3Encoder.encode(paragraph.substring(start, end)).length <= maxTokens) {
-                    end++;
-                }
-                // 防止无限循环
-                if (end === start) {
-                    end++;
-                }
-                chunks.push(paragraph.substring(start, end));
-                start = end;
+        if (!paragraph) {
+            console.warn("发现空段落，跳过编码");
+            return;
+        }
+        const paragraphTokens = enc.encode(paragraph).length;
+
+        if (enc.encode(tempChunk + paragraph).length > maxTokens || paragraphTokens > maxTokens) {
+            if (tempChunk) {
+                chunks.push(tempChunk);
+                tempChunk = '';
             }
+            let subChunks = splitLargeParagraph(paragraph, maxTokens);
+            chunks = chunks.concat(subChunks);
         } else {
-            // 如果段落长度小于最大token数，则直接作为一个chunk
-            chunks.push(paragraph);
+            tempChunk += paragraph + '\n\n';
+            if (enc.encode(tempChunk).length >= minTokens) {
+                chunks.push(tempChunk);
+                tempChunk = '';
+            }
         }
     });
 
+    if (tempChunk) {
+        chunks.push(tempChunk);
+    }
+
     return chunks;
 }
+
+function splitLargeParagraph(paragraph, maxTokens) {
+    let subChunks = [];
+    let start = 0;
+
+    while (start < paragraph.length) {
+        let end = start;
+        while (end < paragraph.length && enc.encode(paragraph.substring(start, end)).length <= maxTokens) {
+            end++;
+        }
+        if (end === start) {
+            end++;
+        }
+        subChunks.push(paragraph.substring(start, end));
+        start = end;
+    }
+
+    return subChunks;
+}
+
+
 
 
 // ...之前的import语句...
@@ -151,7 +181,26 @@ async function insertBookmarkIfNotExists(bookmark) {
 // ...之前的import语句和函数定义...
 
 async function processBookmark(bookmark) {
-    if (!await insertBookmarkIfNotExists(bookmark)) {
+    // 检查该网址是否已经处理过
+    const { data: existingData, error: selectError } = await supabase
+        .from('documents')
+        .select('url')
+        .eq('url', bookmark.link);
+
+    if (selectError) {
+        console.error('Error querying existing URL:', selectError);
+        return;
+    }
+
+    // 如果该网址已经存在，则跳过处理
+    if (existingData && existingData.length > 0) {
+        console.log(`URL already processed: ${bookmark.link}`);
+        return;
+    }
+
+    // 如果网址不存在，则插入新的书签并处理内容
+    const inserted = await insertBookmarkIfNotExists(bookmark);
+    if (!inserted) {
         return;
     }
 
@@ -161,13 +210,7 @@ async function processBookmark(bookmark) {
         return;
     }
 
-    // 将网页内容转换为Markdown
     const markdownContent = turndownService.turndown(pageContent);
-
-    // 这里可以对Markdown内容进行其他处理，例如保存到文件或数据库
-    console.log(markdownContent); // 打印Markdown内容，或进行其他处理
-    // return;
-    // 如果需要继续处理Markdown内容，比如分割和获取Embeddings
     const contentChunks = splitContentForEmbedding(markdownContent);
 
     for (let i = 0; i < contentChunks.length; i++) {
@@ -175,6 +218,7 @@ async function processBookmark(bookmark) {
         await saveChunkToSupabase(bookmark, contentChunks[i], i, chunkEmbedding);
     }
 }
+
 
 // ...main函数和其他代码...
 
@@ -185,7 +229,7 @@ const exampleBookmark = {
     link: "https://jojovi.medium.com/%E7%94%A8chatgpt%E5%81%9A%E7%9F%A5%E8%AF%86%E7%AE%A1%E7%90%86-5dff55eaee11",
 };
 
-processBookmark(exampleBookmark);
+// processBookmark(exampleBookmark);
 // ...之前的所有import语句和函数定义...
 
 async function main() {
@@ -204,5 +248,5 @@ async function main() {
     }
 }
 
-// main();
+main();
 

@@ -24,14 +24,46 @@
             top: 0;
             width: 30%;
             height: 100%;
-            background-color: white;
+            background-color: #f9f9f9; /* 更淡的背景色 */
             overflow-y: auto;
             border-left: 1px solid #ccc;
             z-index: 9999;
-            padding: 10px;
+            padding: 20px;
             box-sizing: border-box;
+            font-family: Arial, sans-serif;
         }
-    `);
+        #custom-search-sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #custom-search-sidebar li {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee; /* 每项之间的分隔线 */
+        }
+        #custom-search-sidebar div {
+            margin-bottom: 5px;
+        }
+        #custom-search-sidebar a {
+            color: #1a0dab;
+            text-decoration: none;
+        }
+        #custom-search-sidebar a:hover {
+            text-decoration: underline;
+        }
+        .title {
+            font-weight: bold;
+            font-size: 1.2em; /* 较大的标题字体 */
+        }
+        .excerpt, .similarity {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .similarity {
+            font-style: italic;
+        }
+        `);
 
     // Function to get or request the Supabase URL
     function getSupabaseUrl() {
@@ -120,13 +152,17 @@
 
             results.forEach(item => {
                 const listItem = document.createElement('li');
-                listItem.style.marginBottom = '10px';
+                listItem.style.marginBottom = '15px';
+                listItem.style.paddingBottom = '15px';
+                listItem.style.borderBottom = '1px solid #eee'; // 分隔线
 
                 // Title
                 if (item.title) {
                     const title = document.createElement('div');
                     title.textContent = item.title;
+                    title.className = 'title';
                     title.style.fontWeight = 'bold';
+                    title.style.fontSize = '1.2em';
                     listItem.appendChild(title);
                 }
 
@@ -135,6 +171,7 @@
                     const url = document.createElement('a');
                     url.href = item.url;
                     url.textContent = item.url;
+                    url.className = 'url';
                     url.style.display = 'block';
                     url.style.marginBottom = '5px';
                     url.style.color = '#1a0dab';
@@ -146,19 +183,25 @@
                 if (item.excerpt) {
                     const excerpt = document.createElement('div');
                     excerpt.textContent = item.excerpt;
+                    excerpt.className = 'excerpt';
+                    excerpt.style.color = '#666';
+                    excerpt.style.fontSize = '0.9em';
                     listItem.appendChild(excerpt);
                 }
 
                 // Content
                 const content = document.createElement('div');
                 content.textContent = item.content;
+                content.style.marginBottom = '5px';
                 listItem.appendChild(content);
 
                 // Similarity Score
                 const similarity = document.createElement('div');
                 similarity.textContent = `Similarity Score: ${item.similarity}`;
+                similarity.className = 'similarity';
                 similarity.style.fontSize = 'small';
                 similarity.style.color = 'gray';
+                similarity.style.fontStyle = 'italic';
                 listItem.appendChild(similarity);
 
                 list.appendChild(listItem);
@@ -169,6 +212,7 @@
             sidebar.textContent = 'No results found.';
         }
     }
+
 
 
 
